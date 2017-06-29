@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://www.springframework.org/schema/beans 
+   http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+   <!--
+      The following ApplicationContextAware bean is created so that the Spring 
+      Container can invoke the setApplicationContext() method to establish
+      the application context for use by the stand-alone Java application.
+   -->
+   <bean id="applicationContextUtil"
+      class="org.elucidant.util.spring.ApplicationContextUtil">
+   </bean>
+
+   <bean id="testString" class="java.lang.String">
+      <constructor-arg value = "This is a test!"/>
+   </bean>
+</beans>
