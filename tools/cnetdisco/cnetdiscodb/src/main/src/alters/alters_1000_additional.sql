@@ -31,6 +31,54 @@ END NMAPSCANARRAYINSERT;
 /
 -- The following are stored procedures that will support the CNETDISCO
 -- application.
+CREATE OR REPLACE PROCEDURE SYSTEMSTATUSINSERT
+(
+   I_IP_ADDRESS_TO_SYSTEM_ID IN NUMBER,
+   I_SYSTEM_UPTIME IN VARCHAR2,
+   I_STATE IN VARCHAR2,
+   I_REASON IN VARCHAR2,
+   I_LASTBOOT IN DATE,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   -- Get next ID sequence value...
+   SELECT SYSTEM_STATUS_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+   INSERT INTO SYSTEM_STATUS(
+      "ID",
+      IP_ADDRESS_TO_SYSTEM_ID,
+      SYSTEM_UPTIME,
+      "STATE",
+      REASON,
+      LASTBOOT,
+      DATE_CREATED,
+      DATE_MODIFIED,
+      CREATED_BY,
+      MODIFIED_BY)
+   VALUES
+   (
+      O_ENTRY_ID,
+      I_IP_ADDRESS_TO_SYSTEM_ID,
+      I_SYSTEM_UPTIME,
+      I_STATE,
+      I_REASON,
+      I_LASTBOOT,
+      SYSDATE,
+      SYSDATE,
+      SYS_CONTEXT('userenv', 'session_user'),
+      SYS_CONTEXT('userenv', 'session_user')
+   );
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('IP_ADDRESS_TO_SYSTEM_ID: ' || I_IP_ADDRESS_TO_SYSTEM_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SYSTEM_UPTIME: ' || I_SYSTEM_UPTIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('STATE: ' || I_STATE );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('REASON: ' || I_REASON );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('LASTBOOT: ' || I_LASTBOOT );  /* Debug line */
+END SYSTEMSTATUSINSERT;
+/
 create or replace PROCEDURE ADDRESSTYPEINSERT
 (
    I_TYPE IN VARCHAR2,
@@ -171,13 +219,9 @@ END IPADDRESSTOSYSTEMINSERT;
 CREATE OR REPLACE PROCEDURE NMAPHOSTINSERT
 (
    I_NMAPSCAN_ID IN NUMBER,
-   I_IP_ADDRESS_TO_SYSTEM_ID IN NUMBER,
-   I_SYSTEM_UPTIME IN VARCHAR2,
-   I_STATE IN VARCHAR2,
-   I_REASON IN VARCHAR2,
+   I_SYSTEM_STATUS_ID IN NUMBER,
    I_SCAN_START_TIME IN DATE,
    I_SCAN_END_TIME IN DATE,
-   I_LASTBOOT IN DATE,
    O_ENTRY_ID OUT NUMBER
 ) AS
    row_count NUMBER;
@@ -188,13 +232,9 @@ BEGIN
    INSERT INTO NMAP_HOST(
       "ID",
       NMAPSCAN_ID,
-      IP_ADDRESS_TO_SYSTEM_ID,
-      SYSTEM_UPTIME,
-      "STATE",
-      REASON,
+      SYSTEM_STATUS_ID,
       SCAN_START_TIME,
       SCAN_END_TIME,
-      LASTBOOT,
       DATE_CREATED,
       DATE_MODIFIED,
       CREATED_BY,
@@ -203,13 +243,9 @@ BEGIN
    (
       O_ENTRY_ID,
       I_NMAPSCAN_ID,
-      I_IP_ADDRESS_TO_SYSTEM_ID,
-      I_SYSTEM_UPTIME,
-      I_STATE,
-      I_REASON,
+      I_SYSTEM_STATUS_ID,
       I_SCAN_START_TIME,
       I_SCAN_END_TIME,
-      I_LASTBOOT,
       SYSDATE,
       SYSDATE,
       SYS_CONTEXT('userenv', 'session_user'),
@@ -219,13 +255,9 @@ BEGIN
    -- The following lines are for DEBUGGING purposes...
    --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
    --DBMS_OUTPUT.PUT_LINE('NMAPSCAN_ID: ' || I_NMAPSCAN_ID );  /* Debug line */
-   --DBMS_OUTPUT.PUT_LINE('IP_ADDRESS_TO_SYSTEM_ID: ' || I_IP_ADDRESS_TO_SYSTEM_ID );  /* Debug line */
-   --DBMS_OUTPUT.PUT_LINE('SYSTEM_UPTIME: ' || I_SYSTEM_UPTIME );  /* Debug line */
-   --DBMS_OUTPUT.PUT_LINE('STATE: ' || I_STATE );  /* Debug line */
-   --DBMS_OUTPUT.PUT_LINE('REASON: ' || I_REASON );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SYSTEM_STATUS_ID: ' || I_SYSTEM_STATUS_ID );  /* Debug line */
    --DBMS_OUTPUT.PUT_LINE('SCAN_START_TIME: ' || I_SCAN_START_TIME );  /* Debug line */
    --DBMS_OUTPUT.PUT_LINE('SCAN_END_TIME: ' || I_SCAN_END_TIME );  /* Debug line */
-   --DBMS_OUTPUT.PUT_LINE('LASTBOOT: ' || I_LASTBOOT );  /* Debug line */
 END NMAPHOSTINSERT;
 /
 /*SP-NMAPHOSTSCRIPTINSERT*****************************************************************/
@@ -279,11 +311,12 @@ create or replace PROCEDURE NMAPHOSTSYSTEMINSERT
    system_entry_id NUMBER;
    ip_address_entry_id NUMBER;
    ip_address_to_system_entry_id NUMBER;
+   system_status_id NUMBER;
 BEGIN
    -- This stored procedure will manage the insertion of the NMAPHOST domain
    -- object content into the NMAP_HOST database table.  This includes the
-   -- host IP Address and System information into the IP_ADDRESS, SYSTEM, and
-   -- IP_ADDRESS_TO_SYSTEM database tables.
+   -- host IP Address and System information into the IP_ADDRESS, SYSTEM,
+   -- IP_ADDRESS_TO_SYSTEM, and SYSTEM_STATUS database tables.
 
    -- The following lines are for DEBUGGING purposes...
    --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
@@ -326,39 +359,15 @@ BEGIN
 
    --DBMS_OUTPUT.PUT_LINE('ip_address_to_system_entry_id: ' || ip_address_to_system_entry_id );  /* Debug line */
    
-   -- Get next NMAP_HOST ID sequence value...
-   SELECT NMAP_HOST_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+   -- Process SYSTEM_STATUS information...
+   SYSTEMSTATUSINSERT(ip_address_to_system_entry_id, I_SYSTEM_UPTIME, I_STATE, I_REASON, I_LASTBOOT, system_status_id);
 
-   INSERT INTO NMAP_HOST(
-      "ID",
-      NMAPSCAN_ID,
-      IP_ADDRESS_TO_SYSTEM_ID,
-      SYSTEM_UPTIME,
-      "STATE",
-      REASON,
-      SCAN_START_TIME,
-      SCAN_END_TIME,
-      LASTBOOT,
-      DATE_CREATED,
-      DATE_MODIFIED,
-      CREATED_BY,
-      MODIFIED_BY)
-   VALUES
-   (
-      O_ENTRY_ID,
-      I_NMAPSCAN_ID,
-      ip_address_to_system_entry_id,
-      I_SYSTEM_UPTIME,
-      I_STATE,
-      I_REASON,
-      I_SCAN_START_TIME,
-      I_SCAN_END_TIME,
-      I_LASTBOOT,
-      SYSDATE,
-      SYSDATE,
-      SYS_CONTEXT('userenv', 'session_user'),
-      SYS_CONTEXT('userenv', 'session_user')
-   );
+   --DBMS_OUTPUT.PUT_LINE('system_status_id: ' || system_status_id );  /* Debug line */
+
+   -- Process NMAP_HOST information...
+   NMAPHOSTINSERT(I_NMAPSCAN_ID, system_status_id, I_SCAN_START_TIME, I_SCAN_END_TIME, O_ENTRY_ID);
+
+   --DBMS_OUTPUT.PUT_LINE('NMAP_HOST ID: ' || O_ENTRY_ID );  /* Debug line */
 END NMAPHOSTSYSTEMINSERT;
 /
 /*SP-NMAP_PORTINSERT*****************************************************************/
@@ -374,7 +383,7 @@ CREATE OR REPLACE PROCEDURE NMAPPORTINSERT
 ) AS
 BEGIN
    -- GET NEXT ID SEQUENCE VALUE...
-   SELECT NMAP_PORT_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+   SELECT NMAP_PORT_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
 INSERT INTO NMAP_PORT (
     ID,
     NMAPSCAN_ID,
@@ -863,6 +872,7 @@ BEGIN
       WHERE KEY_INFO = I_KEY_INFO AND STRENGTH= I_STRENGTH;
    END IF;
 END SSLTLSCIPHERINSERT;
+/
 /*SP-SSLTLSPROTOCOLINSERT*****************************************************************/
 CREATE OR REPLACE PROCEDURE SSLTLSPROTOCOLINSERT
 (
@@ -963,3 +973,4 @@ BEGIN
    --DBMS_OUTPUT.PUT_LINE('MAC_ADDRESS: ' || I_MAC_ADDRESS );  /* Debug line */
    --DBMS_OUTPUT.PUT_LINE('NAME: ' || I_NAME );  /* Debug line */
 END SYSTEMINSERT;
+/
