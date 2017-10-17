@@ -1,0 +1,965 @@
+-- The following were added to address the array of NMAPSCAN types we 
+-- will be processing.  The array is a child of SCAN.
+CREATE or REPLACE TYPE NMAPSCAN_TYPE as object (ID NUMBER, SCAN_ID NUMBER, SEQUENCE NUMBER, SCAN_START_TIME TIMESTAMP(6), SCAN_END_TIME TIMESTAMP(6), ARGUMENTS VARCHAR2(1000), TARGET VARCHAR2(100), SUMMARY VARCHAR2(1000), HOSTS_UP NUMBER, HOSTS_DOWN NUMBER);
+/
+CREATE or REPLACE TYPE ARRAY_NMAPSCANS as TABLE OF NMAPSCAN_TYPE;
+/
+CREATE or REPLACE PROCEDURE NMAPSCANARRAYINSERT
+(
+   NMAPSCANS IN ARRAY_NMAPSCANS
+) IS
+BEGIN
+   FOR i IN 1..NMAPSCANS.COUNT LOOP
+   BEGIN
+      INSERT INTO NMAPSCAN(ID, SCAN_ID, SEQUENCE, SCAN_START_TIME, SCAN_END_TIME, ARGUMENTS, TARGET, SUMMARY, HOSTS_UP, HOSTS_DOWN)
+      VALUES
+      (
+         NMAPSCAN_ID_SEQ.NEXTVAL,
+         NMAPSCANS(i).SCAN_ID,
+         NMAPSCANS(i).SEQUENCE,
+         NMAPSCANS(i).SCAN_START_TIME,
+         NMAPSCANS(i).SCAN_END_TIME,
+         NMAPSCANS(i).ARGUMENTS,
+         NMAPSCANS(i).TARGET,
+         NMAPSCANS(i).SUMMARY,
+         NMAPSCANS(i).HOSTS_UP,
+         NMAPSCANS(i).HOSTS_DOWN
+      );
+   END;
+   END LOOP;
+END NMAPSCANARRAYINSERT;
+/
+-- The following are stored procedures that will support the CNETDISCO
+-- application.
+create or replace PROCEDURE ADDRESSTYPEINSERT
+(
+   I_TYPE IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   -- Check to see if NAME already exists in SYSTEM table...
+   SELECT COUNT(*) INTO row_count
+   FROM ADDRESS_TYPE
+   WHERE "TYPE" = I_TYPE AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+      -- Get next ID sequence value...
+      SELECT ADDRESS_TYPE_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+      INSERT INTO ADDRESS_TYPE(
+         "ID",
+         TYPE,
+         DATE_CREATED,
+         DATE_MODIFIED,
+         CREATED_BY,
+         MODIFIED_BY)
+      VALUES
+      (
+         O_ENTRY_ID,
+         I_TYPE,
+         SYSDATE,
+         SYSDATE,
+         SYS_CONTEXT('userenv', 'session_user'),
+         SYS_CONTEXT('userenv', 'session_user')
+       );
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM ADDRESS_TYPE
+      WHERE "TYPE" = I_TYPE;
+   END IF;
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('TYPE: ' || I_TYPE );  /* Debug line */
+END ADDRESSTYPEINSERT;
+/
+create or replace PROCEDURE IPADDRESSINSERT
+(
+   I_IP_ADDRESS IN VARCHAR2,
+   I_IP_ADDRESS_TYPE_ID IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   -- Check to see if IP_ADDRESS already exists in IP_ADDRESS table...
+   SELECT COUNT(*) INTO row_count
+   FROM IP_ADDRESS
+   WHERE IP_ADDRESS = I_IP_ADDRESS AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+      -- Get next ID sequence value...
+      SELECT IP_ADDRESS_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+      INSERT INTO IP_ADDRESS(
+         "ID",
+         IP_ADDRESS,
+         IP_ADDRESS_TYPE_ID,
+         DATE_CREATED,
+         DATE_MODIFIED,
+         CREATED_BY,
+         MODIFIED_BY)
+      VALUES
+      (
+         O_ENTRY_ID,
+         I_IP_ADDRESS,
+         I_IP_ADDRESS_TYPE_ID,
+         SYSDATE,
+         SYSDATE,
+         SYS_CONTEXT('userenv', 'session_user'),
+         SYS_CONTEXT('userenv', 'session_user')
+       );
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM IP_ADDRESS
+      WHERE IP_ADDRESS = I_IP_ADDRESS;
+   END IF;
+
+   -- The following lines are for DEBUGGING purposes...
+   DBMS_OUTPUT.PUT_LINE('In IPADDRESSINSERT...');
+   DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   DBMS_OUTPUT.PUT_LINE('IP_ADDRESS: ' || I_IP_ADDRESS );  /* Debug line */
+END IPADDRESSINSERT;
+/
+create or replace PROCEDURE IPADDRESSTOSYSTEMINSERT
+(
+   I_IP_ADDRESS_ID IN NUMBER,
+   I_SYSTEM_ID IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   -- Check to see if IP_ADDRESS_TO_SYSTEM already exists in IP_ADDRESS table...
+   SELECT COUNT(*) INTO row_count
+   FROM IP_ADDRESS_TO_SYSTEM
+   WHERE IP_ADDRESS_ID = I_IP_ADDRESS_ID AND SYSTEM_ID = I_SYSTEM_ID AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+      -- Get next ID sequence value...
+      SELECT IP_ADDRESS_TO_SYSTEM_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+      INSERT INTO IP_ADDRESS_TO_SYSTEM(
+         "ID",
+         IP_ADDRESS_ID,
+         SYSTEM_ID,
+         DATE_CREATED,
+         DATE_MODIFIED,
+         CREATED_BY,
+         MODIFIED_BY)
+      VALUES
+      (
+         O_ENTRY_ID,
+         I_IP_ADDRESS_ID,
+         I_SYSTEM_ID,
+         SYSDATE,
+         SYSDATE,
+         SYS_CONTEXT('userenv', 'session_user'),
+         SYS_CONTEXT('userenv', 'session_user')
+       );
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM IP_ADDRESS_TO_SYSTEM
+      WHERE IP_ADDRESS_ID = I_IP_ADDRESS_ID and SYSTEM_ID = I_SYSTEM_ID;
+   END IF;
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('IP_ADDRESS_ID: ' || I_IP_ADDRESS_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SYSTEM_ID: ' || I_SYSTEM_ID );  /* Debug line */
+END IPADDRESSTOSYSTEMINSERT;
+/
+CREATE OR REPLACE PROCEDURE NMAPHOSTINSERT
+(
+   I_NMAPSCAN_ID IN NUMBER,
+   I_IP_ADDRESS_TO_SYSTEM_ID IN NUMBER,
+   I_SYSTEM_UPTIME IN VARCHAR2,
+   I_STATE IN VARCHAR2,
+   I_REASON IN VARCHAR2,
+   I_SCAN_START_TIME IN DATE,
+   I_SCAN_END_TIME IN DATE,
+   I_LASTBOOT IN DATE,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   -- Get next ID sequence value...
+   SELECT NMAP_HOST_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+   INSERT INTO NMAP_HOST(
+      "ID",
+      NMAPSCAN_ID,
+      IP_ADDRESS_TO_SYSTEM_ID,
+      SYSTEM_UPTIME,
+      "STATE",
+      REASON,
+      SCAN_START_TIME,
+      SCAN_END_TIME,
+      LASTBOOT,
+      DATE_CREATED,
+      DATE_MODIFIED,
+      CREATED_BY,
+      MODIFIED_BY)
+   VALUES
+   (
+      O_ENTRY_ID,
+      I_NMAPSCAN_ID,
+      I_IP_ADDRESS_TO_SYSTEM_ID,
+      I_SYSTEM_UPTIME,
+      I_STATE,
+      I_REASON,
+      I_SCAN_START_TIME,
+      I_SCAN_END_TIME,
+      I_LASTBOOT,
+      SYSDATE,
+      SYSDATE,
+      SYS_CONTEXT('userenv', 'session_user'),
+      SYS_CONTEXT('userenv', 'session_user')
+   );
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('NMAPSCAN_ID: ' || I_NMAPSCAN_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('IP_ADDRESS_TO_SYSTEM_ID: ' || I_IP_ADDRESS_TO_SYSTEM_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SYSTEM_UPTIME: ' || I_SYSTEM_UPTIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('STATE: ' || I_STATE );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('REASON: ' || I_REASON );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_START_TIME: ' || I_SCAN_START_TIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_END_TIME: ' || I_SCAN_END_TIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('LASTBOOT: ' || I_LASTBOOT );  /* Debug line */
+END NMAPHOSTINSERT;
+/
+/*SP-NMAPHOSTSCRIPTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPHOSTSCRIPTINSERT
+(
+   I_NMAP_HOST_ID IN NUMBER,
+   I_NMAP_SCRIPT_ID IN NUMBER,
+   I_OUTPUT IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT nmap_host_script_id_seq.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+   INSERT INTO NMAP_HOST_SCRIPT (
+    ID,
+    NMAP_HOST_ID,
+    NMAP_SCRIPT_ID,
+    OUTPUT,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAP_HOST_ID,
+    I_NMAP_SCRIPT_ID,
+    I_OUTPUT,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPHOSTSCRIPTINSERT;
+/
+create or replace PROCEDURE NMAPHOSTSYSTEMINSERT
+(
+   I_NMAPSCAN_ID IN NUMBER,
+   I_NAME IN VARCHAR2,
+   I_IPV4ADDRESS IN VARCHAR2,
+   I_IPV6ADDRESS IN VARCHAR2,
+   I_MACADDRESS IN VARCHAR2,
+   I_SYSTEM_UPTIME IN VARCHAR2,
+   I_STATE IN VARCHAR2,
+   I_REASON IN VARCHAR2,
+   I_SCAN_START_TIME IN DATE,
+   I_SCAN_END_TIME IN DATE,
+   I_LASTBOOT IN DATE,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+   system_entry_id NUMBER;
+   ip_address_entry_id NUMBER;
+   ip_address_to_system_entry_id NUMBER;
+BEGIN
+   -- This stored procedure will manage the insertion of the NMAPHOST domain
+   -- object content into the NMAP_HOST database table.  This includes the
+   -- host IP Address and System information into the IP_ADDRESS, SYSTEM, and
+   -- IP_ADDRESS_TO_SYSTEM database tables.
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('NMAPSCAN_ID: ' || I_NMAPSCAN_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('NAME: ' || I_NAME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('IPV4 ADDRESS: ' || I_IPV4ADDRESS );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('IPV6 ADDRESS: ' || I_IPV6ADDRESS );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('MAC ADDRESS: ' || I_MACADDRESS );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SYSTEM_UPTIME: ' || I_SYSTEM_UPTIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('STATE: ' || I_STATE );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('REASON: ' || I_REASON );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_START_TIME: ' || I_SCAN_START_TIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_END_TIME: ' || I_SCAN_END_TIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('LASTBOOT: ' || I_LASTBOOT );  /* Debug line */
+   
+   IF I_NAME IS NULL THEN
+      RAISE_APPLICATION_ERROR(-20001, 'Host NAME is missing!');
+   END IF;
+
+   -- Process SYSTEM information...
+   SYSTEMINSERT(I_MACADDRESS, I_NAME, system_entry_id);
+
+   -- Process IP_ADDRESS information...
+   -- ADDRESS_TYPE table: We know that IPV4 ADDRESS type is 1
+   -- ADDRESS_TYPE table: We know that IPV6 ADDRESS type is 2
+   -- TODO: What should happen if BOTH are null?
+   IF I_IPV4ADDRESS IS NOT NULL THEN
+      IPADDRESSINSERT(I_IPV4ADDRESS, 1, ip_address_entry_id);
+   ELSIF I_IPV6ADDRESS IS NOT NULL THEN
+      IPADDRESSINSERT(I_IPV6ADDRESS, 2, ip_address_entry_id);
+   ELSE
+      RAISE_APPLICATION_ERROR(-20002, 'IP Address is missing!');
+   END IF;
+
+   --DBMS_OUTPUT.PUT_LINE('ip_address_entry_id: ' || ip_address_entry_id );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('system_entry_id: ' || system_entry_id );  /* Debug line */
+   
+   -- Process IP_ADDRESS_TO_SYSTEM information...
+   IPADDRESSTOSYSTEMINSERT(ip_address_entry_id, system_entry_id, ip_address_to_system_entry_id);
+
+   --DBMS_OUTPUT.PUT_LINE('ip_address_to_system_entry_id: ' || ip_address_to_system_entry_id );  /* Debug line */
+   
+   -- Get next NMAP_HOST ID sequence value...
+   SELECT NMAP_HOST_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+   INSERT INTO NMAP_HOST(
+      "ID",
+      NMAPSCAN_ID,
+      IP_ADDRESS_TO_SYSTEM_ID,
+      SYSTEM_UPTIME,
+      "STATE",
+      REASON,
+      SCAN_START_TIME,
+      SCAN_END_TIME,
+      LASTBOOT,
+      DATE_CREATED,
+      DATE_MODIFIED,
+      CREATED_BY,
+      MODIFIED_BY)
+   VALUES
+   (
+      O_ENTRY_ID,
+      I_NMAPSCAN_ID,
+      ip_address_to_system_entry_id,
+      I_SYSTEM_UPTIME,
+      I_STATE,
+      I_REASON,
+      I_SCAN_START_TIME,
+      I_SCAN_END_TIME,
+      I_LASTBOOT,
+      SYSDATE,
+      SYSDATE,
+      SYS_CONTEXT('userenv', 'session_user'),
+      SYS_CONTEXT('userenv', 'session_user')
+   );
+END NMAPHOSTSYSTEMINSERT;
+/
+/*SP-NMAP_PORTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPPORTINSERT
+(
+   I_NMAPSCAN_ID IN NUMBER,
+   I_NMAP_HOST_ID IN NUMBER,
+   I_PORT_ID IN NUMBER,
+   I_STATE IN VARCHAR2,
+   I_SERVICE IN VARCHAR2,
+   I_REASON  IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_PORT_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+INSERT INTO NMAP_PORT (
+    ID,
+    NMAPSCAN_ID,
+    NMAP_HOST_ID,
+    PORT_ID,
+    STATE,
+    SERVICE,
+    REASON,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAPSCAN_ID,
+    I_NMAP_HOST_ID,
+    I_PORT_ID,
+    I_STATE,
+    I_SERVICE,
+    I_REASON,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPPORTINSERT;
+/
+/*SP-NMAPPORTSCRIPTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPPORTSCRIPTINSERT
+(
+   I_NMAP_PORT_ID IN NUMBER,
+   I_NMAP_SCRIPT_ID IN NUMBER,
+   I_OUTPUT IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   SELECT NMAP_PORT_SCRIPT_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+INSERT INTO NMAP_PORT_SCRIPT (
+    ID,
+    NMAP_PORT_ID,
+    NMAP_SCRIPT_ID,
+    OUTPUT,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAP_PORT_ID,
+    I_NMAP_SCRIPT_ID,
+    I_OUTPUT,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPPORTSCRIPTINSERT;
+/
+/*SP-NMAPPRESCRIPTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPPRESCRIPTINSERT
+(
+   I_NMAPSCAN_ID IN NUMBER,
+   I_OUTPUT IN VARCHAR2,
+   I_NMAP_SCRIPT_ID IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_PRE_SCRIPT_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+INSERT INTO NMAP_PRE_SCRIPT (
+    ID,
+    NMAPSCAN_ID,
+    OUTPUT,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY,
+    NMAP_SCRIPT_ID
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAPSCAN_ID,
+    I_OUTPUT,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    I_NMAP_SCRIPT_ID
+);
+END NMAPPRESCRIPTINSERT;
+/
+/*SP-NMAPPOSTSCRIPTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPPOSTSCRIPTINSERT
+(
+   I_NMAPSCAN_ID IN NUMBER,
+   I_NMAP_SCRIPT_ID IN NUMBER,
+   I_OUTPUT IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_POST_SCRIPT_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+   INSERT INTO NMAP_POST_SCRIPT (
+    ID,
+    NMAPSCAN_ID,
+    NMAP_SCRIPT_ID,
+    OUTPUT,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAPSCAN_ID,
+    I_NMAP_SCRIPT_ID,
+    I_OUTPUT,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPPOSTSCRIPTINSERT;
+/
+CREATE OR REPLACE PROCEDURE NMAPSCANINSERT
+(
+   I_SCAN_ID IN NUMBER,
+   I_SEQUENCE IN NUMBER,
+   I_SCAN_START_TIME IN DATE,
+   I_SCAN_END_TIME IN DATE,
+   I_ARGUMENTS IN VARCHAR2,
+   I_TARGET IN VARCHAR2,
+   I_SUMMARY IN VARCHAR2,
+   I_HOSTS_UP IN NUMBER,
+   I_HOSTS_DOWN IN NUMBER,
+   I_SCAN_RESULTS IN CLOB,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- Get next ID sequence value...
+   SELECT NMAPSCAN_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SEQUENCE: ' || I_SEQUENCE );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN ID: ' || I_SCAN_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_START_TIME: ' || I_SCAN_START_TIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_END_TIME: ' || I_SCAN_START_TIME );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('ARGUMENTS: ' || I_ARGUMENTS );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('TARGET: ' || I_TARGET );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SUMMARY: ' || I_SUMMARY );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('HOSTS_UP: ' || I_HOSTS_UP );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('HOSTS_DOWN: ' || I_HOSTS_DOWN );  /* Debug line */
+   
+   INSERT INTO NMAPSCAN(
+      "ID",
+      SCAN_ID,
+      "SEQUENCE",
+      SCAN_START_TIME,
+      SCAN_END_TIME,
+      ARGUMENTS,
+      "TARGET",
+      "SUMMARY",
+      HOSTS_UP,
+      HOSTS_DOWN,
+      SCAN_RESULTS,
+      DATE_CREATED,
+      DATE_MODIFIED,
+      CREATED_BY,
+      MODIFIED_BY)
+   VALUES
+   (
+      O_ENTRY_ID,
+      I_SCAN_ID,
+      I_SEQUENCE,
+      I_SCAN_START_TIME,
+      I_SCAN_END_TIME,
+      I_ARGUMENTS,
+      I_TARGET,
+      I_SUMMARY,
+      I_HOSTS_UP,
+      I_HOSTS_DOWN,
+      I_SCAN_RESULTS,
+      SYSDATE,
+      SYSDATE,
+      SYS_CONTEXT('userenv', 'session_user'),
+      SYS_CONTEXT('userenv', 'session_user')
+    );
+
+END NMAPSCANINSERT;
+/
+/*SP-NMAPSCRIPTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPSCRIPTINSERT
+(
+   I_NAME IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   SELECT COUNT(*) INTO row_count
+   FROM NMAP_SCRIPT
+   WHERE NAME = I_NAME AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_SCRIPT_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+
+INSERT INTO NMAP_SCRIPT (
+    ID,
+    NAME,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NAME,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM NMAP_SCRIPT
+      WHERE NAME = I_NAME;
+   END IF;
+END NMAPSCRIPTINSERT;
+/
+/*SP-NMAPSSLENUMCIPHERSINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPSSLENUMCIPHERSINSERT
+(
+   I_NMAP_PORT_ID IN NUMBER,
+   I_NMAP_SCRIPT_ID IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_SSL_ENUM_CIPHERS_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+INSERT INTO NMAP_SSL_ENUM_CIPHERS (
+    ID,
+    NMAP_PORT_ID,
+    NMAP_SCRIPT_ID,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAP_PORT_ID,
+    I_NMAP_SCRIPT_ID,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPSSLENUMCIPHERSINSERT;
+/
+/*SP-NMAPSSLCIPHERINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPSSLCIPHERINSERT
+(
+   I_NAME IN VARCHAR2,
+   I_NMAP_SSL_TLS_PROTOCOL_ID IN NUMBER,
+   I_SSL_TLS_CIPHER_ID IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_SSL_CIPHER_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+INSERT INTO NMAP_SSL_CIPHER (
+    ID,
+    NAME,
+    NMAP_SSL_TLS_PROTOCOL_ID,
+    SSL_TLS_CIPHER_ID,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NAME,
+    I_NMAP_SSL_TLS_PROTOCOL_ID,
+    I_SSL_TLS_CIPHER_ID,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPSSLCIPHERINSERT;
+/
+/*SP-NMAPSSLTLSPROTOCOLINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE NMAPSSLTLSPROTOCOLINSERT
+(
+   I_NMAP_SSL_ENUM_CIPHERS_ID IN NUMBER,
+   I_SSL_TLS_PROTOCOL_ID IN NUMBER,
+   I_COMPRESSORS IN VARCHAR2,
+   I_CIPHER_PREFERENCE IN VARCHAR2,
+   I_WARNINGS IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT NMAP_SSL_TLS_PROTOCOL_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+   INSERT INTO NMAP_SSL_TLS_PROTOCOL (
+    ID,
+    NMAP_SSL_ENUM_CIPHERS_ID,
+    SSL_TLS_PROTOCOL_ID,
+    COMPRESSORS,
+    CIPHER_PREFERENCE,
+    WARNINGS,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_NMAP_SSL_ENUM_CIPHERS_ID,
+    I_SSL_TLS_PROTOCOL_ID,
+    I_COMPRESSORS,
+    I_CIPHER_PREFERENCE,
+    I_WARNINGS,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+END NMAPSSLTLSPROTOCOLINSERT;
+/
+/*SP-PORTINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE PORTINSERT
+(
+   I_SYSTEM_ID IN NUMBER,
+   I_PORT IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+    row_count NUMBER;
+BEGIN
+   SELECT COUNT(*) INTO row_count
+   FROM PORT
+   WHERE PORT = I_PORT AND SYSTEM_ID = I_SYSTEM_ID AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+   SELECT PORT_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+   
+INSERT INTO PORT (
+    ID,
+    SYSTEM_ID,
+    PORT,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_SYSTEM_ID,
+    I_PORT,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM PORT
+      WHERE PORT = I_PORT and SYSTEM_ID = I_SYSTEM_ID;
+   END IF;
+END PORTINSERT;
+/
+CREATE OR REPLACE PROCEDURE SCANINSERT
+(
+   I_SCAN_TYPE_ID IN NUMBER,
+   I_SCAN_START IN DATE,
+   I_SEQUENCE_COUNT IN NUMBER,
+   O_ENTRY_ID OUT NUMBER
+) AS
+BEGIN
+   -- Get next ID sequence value...
+   SELECT SCAN_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN TYPE ID: ' || I_SCAN_TYPE_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SCAN_START: ' || I_SCAN_START );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('SEQUENCE COUNT: ' || I_SEQUENCE_COUNT );  /* Debug line */
+
+   INSERT INTO SCAN(
+      "ID",
+      "SCAN_TYPE_ID",
+      "START",
+      SEQUENCE_COUNT,
+      DATE_CREATED,
+      DATE_MODIFIED,
+      CREATED_BY,
+      MODIFIED_BY)
+   VALUES
+   (
+      O_ENTRY_ID,
+      I_SCAN_TYPE_ID,
+      I_SCAN_START,
+      I_SEQUENCE_COUNT,
+      SYSDATE,
+      SYSDATE,
+      SYS_CONTEXT('userenv', 'session_user'),
+      SYS_CONTEXT('userenv', 'session_user')
+    );
+
+END SCANINSERT;
+/
+create or replace PROCEDURE SCANTYPEINSERT
+(
+   I_TYPE IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+BEGIN
+   -- Check to see if NAME already exists in SYSTEM table...
+   SELECT COUNT(*) INTO row_count
+   FROM SCAN_TYPE
+   WHERE "TYPE" = I_TYPE AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+      -- Get next ID sequence value...
+      SELECT SCAN_TYPE_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+      INSERT INTO SCAN_TYPE(
+         "ID",
+         TYPE,
+         DATE_CREATED,
+         DATE_MODIFIED,
+         CREATED_BY,
+         MODIFIED_BY)
+      VALUES
+      (
+         O_ENTRY_ID,
+         I_TYPE,
+         SYSDATE,
+         SYSDATE,
+         SYS_CONTEXT('userenv', 'session_user'),
+         SYS_CONTEXT('userenv', 'session_user')
+       );
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM SCAN_TYPE
+      WHERE "TYPE" = I_TYPE;
+   END IF;
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('TYPE: ' || I_TYPE );  /* Debug line */
+END SCANTYPEINSERT;
+/
+/*SP-SSLTLSCIPHERINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE SSLTLSCIPHERINSERT
+(
+   I_STRENGTH IN CHAR,
+   I_KEY_INFO IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count number;
+BEGIN
+   SELECT COUNT(*) INTO row_count
+   FROM SSL_TLS_CIPHER
+   WHERE KEY_INFO = I_KEY_INFO AND STRENGTH= I_STRENGTH AND ROWNUM = 1;
+
+   IF row_count = 0 THEN 
+   SELECT SSL_TLS_CIPHER_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL;
+   
+   INSERT INTO SSL_TLS_CIPHER (
+    ID,
+    STRENGTH,
+    KEY_INFO,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY) 
+   VALUES (
+    O_ENTRY_ID,
+    I_STRENGTH,
+    I_KEY_INFO,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+    ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM SSL_TLS_CIPHER
+      WHERE KEY_INFO = I_KEY_INFO AND STRENGTH= I_STRENGTH;
+   END IF;
+END SSLTLSCIPHERINSERT;
+/*SP-SSLTLSPROTOCOLINSERT*****************************************************************/
+CREATE OR REPLACE PROCEDURE SSLTLSPROTOCOLINSERT
+(
+   I_PROTOCOL IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+    row_count NUMBER;
+BEGIN
+   SELECT COUNT(*) INTO row_count
+   FROM SSL_TLS_PROTOCOL
+   WHERE PROTOCOL = I_PROTOCOL AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+   -- GET NEXT ID SEQUENCE VALUE...
+   SELECT SSL_TLS_PROTOCOL_ID_SEQ.NEXTVAL INTO O_ENTRY_ID FROM DUAL; 
+   INSERT INTO SSL_TLS_PROTOCOL (
+    ID,
+    PROTOCOL,
+    DATE_CREATED,
+    DATE_MODIFIED,
+    CREATED_BY,
+    MODIFIED_BY
+) VALUES (
+    O_ENTRY_ID,
+    I_PROTOCOL,
+    SYSDATE,
+    SYSDATE,
+    SYS_CONTEXT('USERENV', 'SESSION_USER'),
+    SYS_CONTEXT('USERENV', 'SESSION_USER')
+);
+   ELSE
+      SELECT ID INTO O_ENTRY_ID
+      FROM SSL_TLS_PROTOCOL
+      WHERE PROTOCOL = I_PROTOCOL;
+   END IF;
+END SSLTLSPROTOCOLINSERT;
+/
+create or replace PROCEDURE SYSTEMINSERT
+(
+   I_MAC_ADDRESS IN VARCHAR2,
+   I_NAME IN VARCHAR2,
+   O_ENTRY_ID OUT NUMBER
+) AS
+   row_count NUMBER;
+   current_mac_address VARCHAR2(16);
+BEGIN
+   -- Check to see if NAME already exists in SYSTEM table...
+   SELECT COUNT(*) INTO row_count
+   FROM SYSTEM
+   WHERE "NAME" = I_NAME AND ROWNUM = 1;
+
+   IF row_count = 0 THEN
+      -- Get next ID sequence value...
+      SELECT SYSTEM_ID_SEQ.nextval INTO O_ENTRY_ID FROM DUAL;
+
+      INSERT INTO SYSTEM(
+         "ID",
+         MAC_ADDRESS,
+         NAME,
+         DATE_CREATED,
+         DATE_MODIFIED,
+         CREATED_BY,
+         MODIFIED_BY)
+      VALUES
+      (
+         O_ENTRY_ID,
+         I_MAC_ADDRESS,
+         I_NAME,
+         SYSDATE,
+         SYSDATE,
+         SYS_CONTEXT('userenv', 'session_user'),
+         SYS_CONTEXT('userenv', 'session_user')
+       );
+   ELSE
+      SELECT ID, MAC_ADDRESS INTO O_ENTRY_ID, current_mac_address
+      FROM SYSTEM
+      WHERE "NAME" = I_NAME;
+      
+      --DBMS_OUTPUT.PUT_LINE('MAC ADDRESS passed in: ' || I_MAC_ADDRESS);  /* Debug line */
+      --DBMS_OUTPUT.PUT_LINE('CURRENT MAC ADDRESS: ' || current_mac_address);  /* Debug line */
+      
+      -- Check if MAC ADDRESS is the same...
+      IF I_MAC_ADDRESS IS NOT NULL THEN
+         --DBMS_OUTPUT.PUT_LINE('MAC ADDRESS is NOT NULL: ' || UPPER(I_MAC_ADDRESS));  /* Debug line */
+         --DBMS_OUTPUT.PUT_LINE('CURRENT MAC ADDRESS: ' || UPPER(NVL(current_mac_address, '')));  /* Debug line */
+         
+         IF (current_mac_address IS NULL) OR (UPPER(I_MAC_ADDRESS) != UPPER(current_mac_address)) THEN
+            --DBMS_OUTPUT.PUT_LINE('UPDATING MAC ADDRESS: ' || I_MAC_ADDRESS);  /* Debug line */
+            UPDATE SYSTEM
+            SET MAC_ADDRESS = I_MAC_ADDRESS
+            WHERE "NAME" = I_NAME;
+         END IF;
+      END IF;
+   END IF;
+
+   -- The following lines are for DEBUGGING purposes...
+   --DBMS_OUTPUT.PUT_LINE('ID KEY: ' || O_ENTRY_ID );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('MAC_ADDRESS: ' || I_MAC_ADDRESS );  /* Debug line */
+   --DBMS_OUTPUT.PUT_LINE('NAME: ' || I_NAME );  /* Debug line */
+END SYSTEMINSERT;
