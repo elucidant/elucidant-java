@@ -14,3 +14,5 @@ VALUES (2, 'IPV6', SYSDATE, SYSDATE, sys_context('userenv', 'session_user'), sys
 
 INSERT INTO ADDRESS_TYPE("ID", "TYPE", DATE_CREATED, DATE_MODIFIED, CREATED_BY, MODIFIED_BY)
 VALUES (3, 'MAC', SYSDATE, SYSDATE, sys_context('userenv', 'session_user'), sys_context('userenv', 'session_user'));
+
+COMMIT;
